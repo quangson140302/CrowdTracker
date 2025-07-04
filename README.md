@@ -324,9 +324,15 @@ Dự án này được phân phối dưới giấy phép MIT. Xem `LICENSE` đ�
 
 ## 📞 Liên hệ
 
+<<<<<<< HEAD
 - **Author**: [Your Name]
 - **Email**: your.email@example.com
 - **GitHub**: [@your-username](https://github.com/your-username)
+=======
+- **Author**: [Jeff]
+- **Email**: shnquang02@gmail.com
+- **GitHub**: [@Jeff](https://github.com/quangson140302)
+>>>>>>> b064d9e48aa7f28705fa30ea32f8b697cf361530
 
 ## 🙏 Acknowledgments
 
@@ -341,4 +347,8 @@ Dự án này được tạo cho mục đích học tập và nghiên cứu. Hã
 
 ---
 
+<<<<<<< HEAD
 ⭐ Nếu dự án này hữu ích, hãy cho chúng tôi một star trên GitHub!
+=======
+⭐ Nếu dự án này hữu ích, hãy cho chúng tôi một star trên GitHub!
+>>>>>>> b064d9e48aa7f28705fa30ea32f8b697cf361530
