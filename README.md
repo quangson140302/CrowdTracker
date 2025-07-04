@@ -286,10 +286,8 @@ Dự án này được phân phối dưới giấy phép MIT. Xem `LICENSE` đ�
 
 ## 📞 Liên hệ
 
-- **Author**: [Your Name]
-- **Email**: your.email@example.com
-- **GitHub**: [@your-username](https://github.com/your-username)
-- **LinkedIn**: [Your LinkedIn](https://linkedin.com/in/your-profile)
+- **Author**: Jeffxdaplug
+- **Email**: shnquang02@gmail.com
 
 ## 🙏 Acknowledgments
 
