@@ -1,4 +1,3 @@
-# CrowdTracker
 # 🚶‍♂️ People Counter Dashboard
 
 > Hệ thống đếm người thông minh sử dụng YOLOv8 và OpenCV với giao diện dashboard hiện đại
@@ -19,6 +18,7 @@
 - [API Endpoints](#-api-endpoints)
 - [Cấu trúc dự án](#-cấu-trúc-dự-án)
 - [Demo](#-demo)
+- [Bảo mật](#-bảo-mật)
 - [Đóng góp](#-đóng-góp)
 - [License](#-license)
 
@@ -124,11 +124,11 @@ npm install
 
 ### 4. Cấu hình MongoDB
 ```bash
-# Khởi động MongoDB
+# Khởi động MongoDB local
 mongod
 
 # Hoặc sử dụng MongoDB Atlas (cloud)
-# Cập nhật connection string trong backend/main.py
+# Tạo database và collection cho dự án
 ```
 
 ## 🚀 Sử dụng
@@ -211,11 +211,47 @@ people_counter/
 ### Video Demo
 [Link video demo sẽ được thêm sau]
 
+## 🔒 Bảo mật
+
+### ⚠️ Cảnh báo quan trọng
+
+**KHÔNG BAO GIỜ** commit các thông tin nhạy cảm lên repository:
+
+- ❌ Database connection strings
+- ❌ API keys và secrets
+- ❌ Passwords và credentials
+- ❌ Private IP addresses
+- ❌ Production environment variables
+
+### 🔐 Bảo mật cho Production
+
+1. **Environment Variables**: Sử dụng `.env` files (đã được ignore)
+2. **Database Security**: 
+   - Sử dụng MongoDB Atlas với authentication
+   - Tạo user riêng cho ứng dụng
+   - Whitelist IP addresses
+3. **API Security**:
+   - Implement rate limiting
+   - Add CORS configuration
+   - Use HTTPS in production
+4. **Model Security**:
+   - Không commit YOLOv8 model files lớn
+   - Sử dụng model hosting services
+
+### 📝 Cấu hình an toàn
+
+```bash
+# Tạo file .env (KHÔNG commit file này)
+MONGODB_URI=your_mongodb_connection_string
+API_SECRET_KEY=your_secret_key
+ENVIRONMENT=development
+```
+
 ## 🔧 Cấu hình
 
 ### Environment Variables
 ```bash
-# MongoDB Connection
+# MongoDB Connection (KHÔNG commit connection string)
 MONGODB_URI=mongodb://localhost:27017/people_counter
 
 # API Settings
@@ -253,15 +289,16 @@ npm i -g vercel
 vercel
 ```
 
-### Environment Setup
+### Environment Setup cho Production
 ```bash
-# Backend
-MONGODB_URI=your_mongodb_atlas_uri
+# Backend Environment Variables
+MONGODB_URI=your_production_mongodb_uri
 API_HOST=0.0.0.0
 API_PORT=$PORT
+SECRET_KEY=your_production_secret_key
 
-# Frontend
-REACT_APP_API_BASE=your_backend_url
+# Frontend Environment Variables
+REACT_APP_API_BASE=your_production_backend_url
 ```
 
 ## 🤝 Đóng góp
@@ -279,6 +316,7 @@ Chúng tôi rất hoan nghênh mọi đóng góp! Hãy:
 - Thêm tests cho tính năng mới
 - Cập nhật documentation
 - Kiểm tra performance
+- **KHÔNG commit thông tin nhạy cảm**
 
 ## 📝 License
 
@@ -286,8 +324,9 @@ Dự án này được phân phối dưới giấy phép MIT. Xem `LICENSE` đ�
 
 ## 📞 Liên hệ
 
-- **Author**: Jeffxdaplug
+- **Author**: [Jeff]
 - **Email**: shnquang02@gmail.com
+- **GitHub**: [@Jeff](https://github.com/quangson140302)
 
 ## 🙏 Acknowledgments
 
@@ -295,6 +334,10 @@ Dự án này được phân phối dưới giấy phép MIT. Xem `LICENSE` đ�
 - [OpenCV](https://opencv.org/) cho computer vision
 - [Chart.js](https://www.chartjs.org/) cho biểu đồ
 - [Tailwind CSS](https://tailwindcss.com/) cho styling
+
+## ⚠️ Disclaimer
+
+Dự án này được tạo cho mục đích học tập và nghiên cứu. Hãy đảm bảo tuân thủ các quy định về quyền riêng tư và bảo mật khi sử dụng trong môi trường production.
 
 ---
 
