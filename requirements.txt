@@ -4,4 +4,3 @@ pymongo
 fastapi
 uvicorn
 deep-sort-realtime
-sort-tracker

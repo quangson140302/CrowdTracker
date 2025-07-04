@@ -38,17 +38,17 @@ def get_today_range():
     return start, end
 
 def update_counts():
-    """Cập nhật số đếm vào database"""
+    """Cập nhật số đếm vào database (cộng dồn)"""
     start, end = get_today_range()
     record = collection.find_one({"date": {"$gte": start, "$lte": end}})
     
     if record:
-        # Cập nhật record hiện tại
+        # Cộng dồn count vào record hiện tại
         collection.update_one(
             {"_id": record["_id"]}, 
             {
-                "$set": {
-                    "count": total_count
+                "$inc": {
+                    "count": 1
                 }
             }
         )
@@ -56,11 +56,11 @@ def update_counts():
         # Tạo record mới
         doc = {
             "date": start,
-            "count": total_count
+            "count": 1
         }
         collection.insert_one(doc)
 
-def find_nearest_object(center_x, center_y, tracked_objects, threshold=50):
+def find_nearest_object(center_x, center_y, tracked_objects, threshold=150):
     """Tìm object gần nhất trong tracked_objects"""
     for obj_id, obj_data in tracked_objects.items():
         obj_center_x = (obj_data['bbox'][0] + obj_data['bbox'][2]) // 2
@@ -84,8 +84,9 @@ while True:
     current_detections = []
     for result in results:
         for box in result.boxes:
+            print("box:",box)
             cls = int(box.cls[0])
-            if model.names[cls] == 'person':
+            if model.names[cls] in ['person', 'car', 'motorbike']:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 conf = float(box.conf[0])
                 center_x = (x1 + x2) // 2
@@ -100,15 +101,14 @@ while True:
     # Tracking đơn giản dựa trên khoảng cách
     new_tracked_objects = {}
     
+    crossed_this_frame = 0
+
     for detection in current_detections:
         center_x, center_y = detection['center']
         bbox = detection['bbox']
-        
-        # Tìm object gần nhất đã track
-        nearest_id = find_nearest_object(center_x, center_y, tracked_objects)
+        nearest_id = find_nearest_object(center_x, center_y, tracked_objects, threshold=150)
         
         if nearest_id is not None:
-            # Cập nhật object đã tồn tại
             old_center_y = tracked_objects[nearest_id]['center'][1]
             new_tracked_objects[nearest_id] = {
                 'bbox': bbox,
@@ -117,26 +117,19 @@ while True:
                 'crossed': tracked_objects[nearest_id]['crossed'],
                 'frames': tracked_objects[nearest_id]['frames'] + 1
             }
-            
-            # Xác định hướng di chuyển nếu chưa có
-            if new_tracked_objects[nearest_id]['direction'] is None and new_tracked_objects[nearest_id]['frames'] > 5:
+            if new_tracked_objects[nearest_id]['direction'] is None and new_tracked_objects[nearest_id]['frames'] > 1:
                 if center_y < old_center_y - 10:
                     new_tracked_objects[nearest_id]['direction'] = 'up'
                 elif center_y > old_center_y + 10:
                     new_tracked_objects[nearest_id]['direction'] = 'down'
-            
-            # Kiểm tra qua counting line
             if not new_tracked_objects[nearest_id]['crossed']:
                 if (old_center_y < counting_line_y and center_y >= counting_line_y) or \
                    (old_center_y > counting_line_y and center_y <= counting_line_y):
-                    
                     total_count += 1
-                    print(f"Person {nearest_id} crossed the line")
-                    
+                    crossed_this_frame += 1
+                    print(f"Object {nearest_id} crossed the line")
                     new_tracked_objects[nearest_id]['crossed'] = True
-                    update_counts()
         else:
-            # Tạo object mới
             obj_id = f"obj_{frame_count}_{len(new_tracked_objects)}"
             new_tracked_objects[obj_id] = {
                 'bbox': bbox,
@@ -145,7 +138,7 @@ while True:
                 'crossed': False,
                 'frames': 1
             }
-    
+
     tracked_objects = new_tracked_objects
     
     # Vẽ bounding boxes và thông tin
@@ -174,6 +167,9 @@ while True:
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
+
+    if crossed_this_frame > 0:
+        update_counts()
 
 cap.release()
 cv2.destroyAllWindows()

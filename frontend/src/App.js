@@ -488,23 +488,13 @@ function App() {
         <div className="mb-12 fade-in" style={{ animationDelay: '0.2s' }}>
           <h2 className="text-2xl font-bold mb-4 text-white">{getChartTitle()}:</h2>
           <div className="chart-container">
-            {activeTab === 'daily' ? (
-              <Line 
-                key={activeTab}
-                ref={chartRef} 
-                data={lineChartData} 
-                options={lineChartOptions} 
-                height={400} 
-              />
-            ) : (
-              <Bar 
-                key={activeTab}
-                ref={chartRef} 
-                data={histogramData} 
-                options={histogramOptions} 
-                height={300} 
-              />
-            )}
+            <Line 
+              key={activeTab}
+              ref={chartRef} 
+              data={lineChartData} 
+              options={lineChartOptions} 
+              height={400} 
+            />
           </div>
         </div>
 
