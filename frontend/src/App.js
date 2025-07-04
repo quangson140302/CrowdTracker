@@ -6,17 +6,18 @@ import {
   LinearScale,
   PointElement,
   LineElement,
+  BarElement,
   Title,
   Tooltip,
   Legend,
   Filler,
 } from 'chart.js';
-import { Line } from 'react-chartjs-2';
-import './App.css'; // Thêm file CSS cho animation
+import { Line, Bar } from 'react-chartjs-2';
+import './App.css';
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
 
-const API_BASE = "http://localhost:8000"; // Sửa lại nếu backend chạy ở host khác
+const API_BASE = "http://localhost:8000";
 
 function App() {
   const [detections, setDetections] = useState([]);
@@ -24,15 +25,20 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [date, setDate] = useState({ year: new Date().getFullYear(), month: '', day: '' });
   const [today, setToday] = useState({ date: '', count: 0 });
+  const [activeTab, setActiveTab] = useState('daily'); // daily, monthly, yearly
+  const [filteredData, setFilteredData] = useState([]);
   const chartRef = useRef(null);
 
-  // Lấy danh sách tổng hợp theo ngày khi load trang
   useEffect(() => {
     fetchAllDetections();
     fetchTodayDetection();
     fetchCountByDate(date.year, date.month, date.day);
     // eslint-disable-next-line
   }, []);
+
+  useEffect(() => {
+    processDataForTab();
+  }, [detections, activeTab]);
 
   const fetchAllDetections = async () => {
     setLoading(true);
@@ -67,6 +73,82 @@ function App() {
     }
   };
 
+  const processDataForTab = () => {
+    if (!detections.length) {
+      setFilteredData([]);
+      return;
+    }
+
+    const sortedDetections = [...detections].sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    switch (activeTab) {
+      case 'daily':
+        setFilteredData(sortedDetections);
+        break;
+      case 'monthly':
+        const monthlyData = aggregateByMonth(sortedDetections);
+        console.log('Monthly data:', monthlyData);
+        setFilteredData(monthlyData);
+        break;
+      case 'yearly':
+        const yearlyData = aggregateByYear(sortedDetections);
+        console.log('Yearly data:', yearlyData);
+        setFilteredData(yearlyData);
+        break;
+      default:
+        setFilteredData(sortedDetections);
+    }
+  };
+
+  const aggregateByMonth = (data) => {
+    const monthlyMap = new Map();
+    
+    data.forEach(item => {
+      const date = new Date(item.date);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const monthName = date.toLocaleDateString('vi-VN', { year: 'numeric', month: 'long' });
+      
+      if (monthlyMap.has(monthKey)) {
+        monthlyMap.get(monthKey).count += item.count;
+      } else {
+        monthlyMap.set(monthKey, { 
+          date: monthName, 
+          count: item.count,
+          sortKey: monthKey // Thêm sortKey để sắp xếp
+        });
+      }
+    });
+    
+    // Sắp xếp theo thứ tự thời gian
+    return Array.from(monthlyMap.values())
+      .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+      .map(item => ({ date: item.date, count: item.count })); // Loại bỏ sortKey
+  };
+
+  const aggregateByYear = (data) => {
+    const yearlyMap = new Map();
+    
+    data.forEach(item => {
+      const date = new Date(item.date);
+      const yearKey = date.getFullYear().toString();
+      
+      if (yearlyMap.has(yearKey)) {
+        yearlyMap.get(yearKey).count += item.count;
+      } else {
+        yearlyMap.set(yearKey, { 
+          date: yearKey, 
+          count: item.count,
+          sortKey: yearKey // Thêm sortKey để sắp xếp
+        });
+      }
+    });
+    
+    // Sắp xếp theo thứ tự thời gian
+    return Array.from(yearlyMap.values())
+      .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+      .map(item => ({ date: item.date, count: item.count })); // Loại bỏ sortKey
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setDate(prev => ({ ...prev, [name]: value }));
@@ -77,16 +159,21 @@ function App() {
     fetchCountByDate(date.year, date.month, date.day);
   };
 
-  // Sắp xếp theo ngày tăng dần
-  const sortedDetections = [...detections].sort((a, b) => new Date(a.date) - new Date(b.date));
-  const labels = sortedDetections.map(item => item.date);
-  const dataCounts = sortedDetections.map(item => item.count);
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+  };
 
-  const chartData = {
+  // Chart data
+  const labels = filteredData.map(item => item.date);
+  const dataCounts = filteredData.map(item => item.count);
+
+  console.log('Chart data:', { activeTab, labels, dataCounts, filteredData });
+
+  const lineChartData = {
     labels,
     datasets: [
       {
-        label: 'Số lượt phát hiện',
+        label: 'Số người đi qua',
         data: dataCounts,
         fill: true,
         backgroundColor: (context) => {
@@ -94,24 +181,76 @@ function App() {
           const {ctx, chartArea} = chart;
           if (!chartArea) return null;
           const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-          gradient.addColorStop(0, 'rgba(245, 158, 66, 0.3)'); // secondary
-          gradient.addColorStop(1, 'rgba(245, 158, 66, 0.05)');
+          gradient.addColorStop(0, 'rgba(102, 126, 234, 0.3)');
+          gradient.addColorStop(1, 'rgba(102, 126, 234, 0.05)');
           return gradient;
         },
-        borderColor: '#f59e42', // secondary
-        pointBackgroundColor: '#2563eb', // primary
-        pointRadius: 5,
+        borderColor: '#667eea',
+        pointBackgroundColor: '#764ba2',
+        pointRadius: 6,
+        pointHoverRadius: 8,
         tension: 0.4,
+        borderWidth: 3,
       },
     ],
   };
 
-  const chartOptions = {
+  const histogramData = {
+    labels,
+    datasets: [
+      {
+        label: 'Số người đi qua',
+        data: dataCounts,
+        backgroundColor: (context) => {
+          const value = context.parsed.y;
+          const max = Math.max(...dataCounts);
+          const ratio = value / max;
+          
+          // Gradient từ tím nhạt đến đậm dựa trên giá trị
+          const alpha = 0.3 + (ratio * 0.5); // 0.3 đến 0.8
+          return `rgba(118, 75, 162, ${alpha})`;
+        },
+        borderColor: '#764ba2',
+        borderWidth: 1,
+        borderRadius: 4,
+        borderSkipped: false,
+        hoverBackgroundColor: 'rgba(102, 126, 234, 0.8)',
+        hoverBorderColor: '#667eea',
+        hoverBorderWidth: 2,
+      },
+    ],
+  };
+
+  const getChartTitle = () => {
+    switch (activeTab) {
+      case 'daily': return 'Thống kê số người đi qua theo ngày';
+      case 'monthly': return 'Thống kê số người đi qua theo tháng';
+      case 'yearly': return 'Thống kê số người đi qua theo năm';
+      default: return 'Thống kê số người đi qua';
+    }
+  };
+
+  const lineChartOptions = {
     responsive: true,
     plugins: {
       legend: { display: false },
-      title: { display: true, text: 'Thống kê số lượt phát hiện theo ngày', font: { size: 20 } },
-      tooltip: { mode: 'index', intersect: false },
+      title: { 
+        display: true, 
+        text: getChartTitle(), 
+        font: { size: 20, weight: 'bold' },
+        color: '#667eea'
+      },
+      tooltip: { 
+        mode: 'index', 
+        intersect: false,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        titleColor: '#667eea',
+        bodyColor: '#333',
+        borderColor: '#667eea',
+        borderWidth: 1,
+        cornerRadius: 12,
+        displayColors: false,
+      },
     },
     interaction: {
       mode: 'nearest',
@@ -120,84 +259,290 @@ function App() {
     },
     scales: {
       x: {
-        grid: { display: false },
-        title: { display: true, text: 'Ngày' }
+        grid: { 
+          display: false,
+          color: 'rgba(102, 126, 234, 0.1)'
+        },
+        title: { 
+          display: true, 
+          text: 'Ngày',
+          color: '#667eea',
+          font: { weight: 'bold' }
+        },
+        ticks: {
+          color: '#667eea',
+          font: { weight: '500' }
+        }
       },
       y: {
         beginAtZero: true,
-        title: { display: true, text: 'Số lượt phát hiện' }
+        title: { 
+          display: true, 
+          text: 'Số người đi qua',
+          color: '#667eea',
+          font: { weight: 'bold' }
+        },
+        grid: {
+          color: 'rgba(102, 126, 234, 0.1)',
+          lineWidth: 1
+        },
+        ticks: {
+          color: '#667eea',
+          font: { weight: '500' }
+        }
       }
     }
   };
 
+  const histogramOptions = {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      title: { 
+        display: true, 
+        text: getChartTitle(), 
+        font: { size: 20, weight: 'bold' },
+        color: '#764ba2'
+      },
+      tooltip: { 
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        titleColor: '#764ba2',
+        bodyColor: '#333',
+        borderColor: '#764ba2',
+        borderWidth: 1,
+        cornerRadius: 12,
+        displayColors: false,
+        callbacks: {
+          label: function(context) {
+            return `Số người đi qua: ${context.parsed.y}`;
+          }
+        }
+      },
+    },
+    scales: {
+      x: {
+        grid: { 
+          display: false,
+          color: 'rgba(118, 75, 162, 0.1)'
+        },
+        title: { 
+          display: true, 
+          text: activeTab === 'monthly' ? 'Tháng' : 'Năm',
+          color: '#764ba2',
+          font: { weight: 'bold' }
+        },
+        ticks: {
+          color: '#764ba2',
+          font: { weight: '500' }
+        }
+      },
+      y: {
+        beginAtZero: true,
+        title: { 
+          display: true, 
+          text: 'Số người đi qua',
+          color: '#764ba2',
+          font: { weight: 'bold' }
+        },
+        grid: {
+          color: 'rgba(118, 75, 162, 0.1)',
+          lineWidth: 1
+        },
+        ticks: {
+          color: '#764ba2',
+          font: { weight: '500' }
+        }
+      }
+    }
+  };
+
+  const getTotalCount = () => {
+    return filteredData.reduce((sum, item) => sum + item.count, 0);
+  };
+
+  const getAverageCount = () => {
+    return filteredData.length > 0 ? Math.round(getTotalCount() / filteredData.length) : 0;
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-light to-secondary-light flex items-center justify-center py-8 px-2">
-      <main className="w-full max-w-6xl">
+    <div className="gradient-bg">
+      {/* Floating particles */}
+      <div className="particles">
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+      </div>
+
+      <main className="relative z-10 w-full max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
-        <header className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4 fade-in">
-          <h1 className="text-4xl font-extrabold text-heading dark:text-heading-dark tracking-tight pop-in">People Counter Dashboard</h1>
-          <form className="flex flex-wrap gap-4 items-end pop-in" onSubmit={handleSubmit}>
+        <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-12 gap-6 fade-in">
+          <div className="text-center lg:text-left">
+            <h1 className="text-5xl lg:text-6xl font-extrabold text-white tracking-tight pop-in mb-2">
+              People Counter
+            </h1>
+            <p className="text-xl text-white/80 font-medium">Dashboard Analytics</p>
+          </div>
+          
+          <form className="search-form flex flex-wrap gap-4 items-end pop-in" onSubmit={handleSubmit}>
             <div className="w-24">
-              <label className="block text-xs font-medium mb-1">Năm</label>
-              <input type="number" name="year" min="2020" max="2100" value={date.year} onChange={handleChange} className="border rounded px-2 py-1 w-full" required />
+              <label className="block text-xs font-medium mb-2 text-white/90">Năm</label>
+              <input 
+                type="number" 
+                name="year" 
+                min="2020" 
+                max="2100" 
+                value={date.year} 
+                onChange={handleChange} 
+                className="form-input w-full" 
+                required 
+              />
             </div>
-            <div className="w-16">
-              <label className="block text-xs font-medium mb-1">Tháng</label>
-              <input type="number" name="month" min="1" max="12" value={date.month} onChange={handleChange} className="border rounded px-2 py-1 w-full" placeholder="" />
+            <div className="w-20">
+              <label className="block text-xs font-medium mb-2 text-white/90">Tháng</label>
+              <input 
+                type="number" 
+                name="month" 
+                min="1" 
+                max="12" 
+                value={date.month} 
+                onChange={handleChange} 
+                className="form-input w-full" 
+                placeholder="MM"
+              />
             </div>
-            <div className="w-16">
-              <label className="block text-xs font-medium mb-1">Ngày</label>
-              <input type="number" name="day" min="1" max="31" value={date.day} onChange={handleChange} className="border rounded px-2 py-1 w-full" placeholder="" />
+            <div className="w-20">
+              <label className="block text-xs font-medium mb-2 text-white/90">Ngày</label>
+              <input 
+                type="number" 
+                name="day" 
+                min="1" 
+                max="31" 
+                value={date.day} 
+                onChange={handleChange} 
+                className="form-input w-full" 
+                placeholder="DD"
+              />
             </div>
-            <button type="submit" className="bg-primary text-white px-4 py-2 rounded hover:bg-primary-dark transition pop-in">Xem thống kê</button>
+            <button type="submit" className="search-button">
+              {loading ? (
+                <span className="loading-spinner"></span>
+              ) : (
+                'Xem thống kê'
+              )}
+            </button>
           </form>
         </header>
+
         {/* Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 fade-in">
-          <div className="bg-white rounded-2xl shadow-lg p-6 flex flex-col items-center pop-in border-t-4 border-primary">
-            <div className="text-5xl font-bold text-primary mb-2">{count !== null ? count : '...'}</div>
-            <div className="text-sm text-primary-dark">Số lượt phát hiện theo thời gian chọn</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12 fade-in">
+          <div className="stat-card pop-in">
+            <div className="stat-number pulse">{count !== null ? count : '...'}</div>
+            <div className="text-sm text-gray-600 font-medium">Số người đi qua theo thời gian chọn</div>
           </div>
-          <div className="bg-white rounded-2xl shadow-lg p-6 flex flex-col items-center pop-in border-t-4 border-secondary">
-            <div className="text-5xl font-bold text-secondary mb-2">{today.count}</div>
-            <div className="text-sm text-primary-dark">Số lượt phát hiện hôm nay</div>
-            <div className="text-xs text-primary mt-1">{today.date}</div>
+          
+          <div className="stat-card pop-in">
+            <div className="stat-number pulse">{today.count}</div>
+            <div className="text-sm text-gray-600 font-medium">Số người đi qua hôm nay</div>
+            <div className="text-xs text-gray-500 mt-1">{today.date}</div>
           </div>
-          <div className="bg-white rounded-2xl shadow-lg p-6 flex flex-col items-center pop-in border-t-4 border-primary-light">
-            <div className="text-5xl font-bold text-primary-light mb-2">{detections.length}</div>
-            <div className="text-sm text-primary-dark">Số ngày có dữ liệu</div>
+          
+          <div className="stat-card pop-in">
+            <div className="stat-number pulse">{getTotalCount()}</div>
+            <div className="text-sm text-gray-600 font-medium">Tổng số người đi qua</div>
+          </div>
+          
+          <div className="stat-card pop-in">
+            <div className="stat-number pulse">{getAverageCount()}</div>
+            <div className="text-sm text-gray-600 font-medium">
+              Trung bình mỗi {activeTab === 'daily' ? 'ngày' : activeTab === 'monthly' ? 'tháng' : 'năm'}
+            </div>
           </div>
         </div>
+
+        {/* Tabs */}
+        <div className="mb-8 fade-in">
+          <div className="tab-container flex space-x-1">
+            <button
+              onClick={() => handleTabChange('daily')}
+              className={`tab-button ${activeTab === 'daily' ? 'active' : ''}`}
+            >
+              📅 Theo ngày
+            </button>
+            <button
+              onClick={() => handleTabChange('monthly')}
+              className={`tab-button ${activeTab === 'monthly' ? 'active' : ''}`}
+            >
+              📊 Theo tháng
+            </button>
+            <button
+              onClick={() => handleTabChange('yearly')}
+              className={`tab-button ${activeTab === 'yearly' ? 'active' : ''}`}
+            >
+              📈 Theo năm
+            </button>
+          </div>
+        </div>
+
         {/* Chart */}
-        <div className="mb-8 fade-in" style={{ animationDelay: '0.2s' }}>
-          <h2 className="text-xl font-semibold mb-2 text-white">Biểu đồ số lượt phát hiện theo ngày:</h2>
-          <div className="bg-white p-2 md:p-6 rounded-2xl shadow-lg">
-            <Line ref={chartRef} data={chartData} options={chartOptions} height={320} />
+        <div className="mb-12 fade-in" style={{ animationDelay: '0.2s' }}>
+          <h2 className="text-2xl font-bold mb-4 text-white">{getChartTitle()}:</h2>
+          <div className="chart-container">
+            {activeTab === 'daily' ? (
+              <Line 
+                key={activeTab}
+                ref={chartRef} 
+                data={lineChartData} 
+                options={lineChartOptions} 
+                height={400} 
+              />
+            ) : (
+              <Bar 
+                key={activeTab}
+                ref={chartRef} 
+                data={histogramData} 
+                options={histogramOptions} 
+                height={300} 
+              />
+            )}
           </div>
         </div>
+
         {/* Table */}
         <div className="fade-in" style={{ animationDelay: '0.3s' }}>
-          <h2 className="text-xl font-semibold mb-2 text-white">Tổng hợp số lượt phát hiện theo ngày:</h2>
+          <h2 className="text-2xl font-bold mb-4 text-white">
+            Tổng hợp số người đi qua {activeTab === 'daily' ? 'theo ngày' : activeTab === 'monthly' ? 'theo tháng' : 'theo năm'}:
+          </h2>
           {loading ? (
-            <div>Đang tải dữ liệu...</div>
+            <div className="text-center py-8">
+              <div className="loading-spinner mx-auto mb-4"></div>
+              <p className="text-white/80">Đang tải dữ liệu...</p>
+            </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full border border-gray-200 text-sm md:text-base rounded-xl overflow-hidden">
-                <thead className="bg-primary-light/30">
+            <div className="data-table overflow-x-auto">
+              <table className="min-w-full text-sm md:text-base">
+                <thead className="table-header">
                   <tr>
-                    <th className="px-2 md:px-4 py-2 border">Ngày</th>
-                    <th className="px-2 md:px-4 py-2 border">Số lượt phát hiện</th>
+                    <th className="px-6 py-4 text-left font-bold text-gray-700">
+                      {activeTab === 'daily' ? 'Ngày' : activeTab === 'monthly' ? 'Tháng' : 'Năm'}
+                    </th>
+                    <th className="px-6 py-4 text-center font-bold text-gray-700">Số người đi qua</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedDetections.map((item, idx) => (
-                    <tr key={item._id || idx} className="hover:bg-secondary-light/30 pop-in">
-                      <td className="px-2 md:px-4 py-2 border">{item.date}</td>
-                      <td className="px-2 md:px-4 py-2 border text-center">{item.count}</td>
+                  {filteredData.map((item, idx) => (
+                    <tr key={idx} className="table-row pop-in" style={{ animationDelay: `${0.1 * idx}s` }}>
+                      <td className="px-6 py-4 font-medium text-gray-800">{item.date}</td>
+                      <td className="px-6 py-4 text-center font-bold text-gray-800">{item.count}</td>
                     </tr>
                   ))}
-                  {sortedDetections.length === 0 && (
-                    <tr><td colSpan={2} className="text-center py-4">Không có dữ liệu</td></tr>
+                  {filteredData.length === 0 && (
+                    <tr>
+                      <td colSpan={2} className="text-center py-12 text-gray-500">
+                        <div className="text-4xl mb-2">📊</div>
+                        Không có dữ liệu
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>

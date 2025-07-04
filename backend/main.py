@@ -42,7 +42,10 @@ def get_today_detection():
         record["_id"] = str(record["_id"])
         record["date"] = record["date"].strftime("%Y-%m-%d")
         return record
-    return {"date": start.strftime("%Y-%m-%d"), "count": 0}
+    return {
+        "date": start.strftime("%Y-%m-%d"), 
+        "count": 0
+    }
 
 @app.get("/detections/count/today")
 def get_today_count():
@@ -50,7 +53,7 @@ def get_today_count():
     start = datetime(now.year, now.month, now.day)
     end = start + timedelta(days=1)
     record = collection.find_one({"date": {"$gte": start, "$lt": end}})
-    count = record["count"] if record else 0
+    count = record.get("count", 0) if record else 0
     return {"count": count}
 
 @app.get("/detections/count/by-date")
@@ -59,14 +62,11 @@ def get_count_by_date(
     month: int = Query(None, description="Tháng"),
     day: int = Query(None, description="Ngày")
 ):
-    # Nếu chỉ có year: thống kê theo năm
-    # Nếu có year, month: thống kê theo tháng
-    # Nếu có year, month, day: thống kê theo ngày
     if day and month:
         start = datetime(year, month, day)
         end = start + timedelta(days=1)
         record = collection.find_one({"date": {"$gte": start, "$lt": end}})
-        count = record["count"] if record else 0
+        count = record.get("count", 0) if record else 0
         return {"count": count}
     elif month:
         start = datetime(year, month, 1)

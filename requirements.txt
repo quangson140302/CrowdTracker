@@ -3,3 +3,5 @@ opencv-python
 pymongo
 fastapi
 uvicorn
+deep-sort-realtime
+sort-tracker
