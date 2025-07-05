@@ -22,12 +22,8 @@ if ret:
 else:
     height, width = 480, 640
 
-# Định nghĩa vùng đếm (counting line) - giữa màn hình
-counting_line_y = height // 2
-line_margin = 50  # Khoảng cách cho phép để xác định đã qua line
-
 # Lưu trạng thái tracking đơn giản
-tracked_objects = {}  # {center_x: {'bbox': [x1,y1,x2,y2], 'direction': None, 'crossed': False, 'frames': 0}}
+tracked_objects = {}  # {id: {'bbox': [x1,y1,x2,y2], 'class': class_name, 'frames': 0, 'counted': False}}
 total_count = 0
 frame_count = 0
 
@@ -60,15 +56,22 @@ def update_counts():
         }
         collection.insert_one(doc)
 
-def find_nearest_object(center_x, center_y, tracked_objects, threshold=150):
+def find_nearest_object(center_x, center_y, class_name, tracked_objects, threshold=150):
     """Tìm object gần nhất trong tracked_objects"""
     for obj_id, obj_data in tracked_objects.items():
+        if obj_data['class'] != class_name:  # Only match objects of same class
+            continue
         obj_center_x = (obj_data['bbox'][0] + obj_data['bbox'][2]) // 2
         obj_center_y = (obj_data['bbox'][1] + obj_data['bbox'][3]) // 2
         distance = np.sqrt((center_x - obj_center_x)**2 + (center_y - obj_center_y)**2)
         if distance < threshold:
             return obj_id
     return None
+
+def is_inside(boxA, boxB):
+    # box = [x1, y1, x2, y2]
+    return (boxA[0] >= boxB[0] and boxA[1] >= boxB[1] and
+            boxA[2] <= boxB[2] and boxA[3] <= boxB[3])
 
 while True:
     ret, frame = cap.read()
@@ -84,59 +87,64 @@ while True:
     current_detections = []
     for result in results:
         for box in result.boxes:
-            print("box:",box)
             cls = int(box.cls[0])
-            if model.names[cls] in ['person', 'car', 'motorbike']:
+            class_name = model.names[cls]
+            if class_name in ['person', 'car', 'motorcycle']:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 conf = float(box.conf[0])
                 center_x = (x1 + x2) // 2
                 center_y = (y1 + y2) // 2
-                
                 current_detections.append({
                     'bbox': [x1, y1, x2, y2],
                     'center': [center_x, center_y],
+                    'class': class_name,
                     'conf': conf
                 })
-    
+    # Lọc: chỉ count vehicle nếu person nằm trong vehicle
+    persons = [d for d in current_detections if d['class'] == 'person']
+    vehicles = [d for d in current_detections if d['class'] in ['car', 'motorcycle']]
+    filtered_persons = []
+    for p in persons:
+        inside_vehicle = False
+        for v in vehicles:
+            if is_inside(p['bbox'], v['bbox']):
+                inside_vehicle = True
+                break
+        if not inside_vehicle:
+            filtered_persons.append(p)
+    filtered_detections = vehicles + filtered_persons
     # Tracking đơn giản dựa trên khoảng cách
     new_tracked_objects = {}
-    
-    crossed_this_frame = 0
-
-    for detection in current_detections:
+    new_objects_count = 0
+    for detection in filtered_detections:
         center_x, center_y = detection['center']
         bbox = detection['bbox']
-        nearest_id = find_nearest_object(center_x, center_y, tracked_objects, threshold=150)
-        
+        class_name = detection['class']
+        nearest_id = find_nearest_object(center_x, center_y, class_name, tracked_objects)
         if nearest_id is not None:
-            old_center_y = tracked_objects[nearest_id]['center'][1]
+            # Update existing object
             new_tracked_objects[nearest_id] = {
                 'bbox': bbox,
                 'center': [center_x, center_y],
-                'direction': tracked_objects[nearest_id]['direction'],
-                'crossed': tracked_objects[nearest_id]['crossed'],
-                'frames': tracked_objects[nearest_id]['frames'] + 1
+                'class': class_name,
+                'frames': tracked_objects[nearest_id]['frames'] + 1,
+                'counted': tracked_objects[nearest_id]['counted']
             }
-            if new_tracked_objects[nearest_id]['direction'] is None and new_tracked_objects[nearest_id]['frames'] > 1:
-                if center_y < old_center_y - 10:
-                    new_tracked_objects[nearest_id]['direction'] = 'up'
-                elif center_y > old_center_y + 10:
-                    new_tracked_objects[nearest_id]['direction'] = 'down'
-            if not new_tracked_objects[nearest_id]['crossed']:
-                if (old_center_y < counting_line_y and center_y >= counting_line_y) or \
-                   (old_center_y > counting_line_y and center_y <= counting_line_y):
-                    total_count += 1
-                    crossed_this_frame += 1
-                    print(f"Object {nearest_id} crossed the line")
-                    new_tracked_objects[nearest_id]['crossed'] = True
+            # If object has been tracked for enough frames and not counted yet, count it
+            if new_tracked_objects[nearest_id]['frames'] > 5 and not new_tracked_objects[nearest_id]['counted']:
+                total_count += 1
+                new_objects_count += 1
+                new_tracked_objects[nearest_id]['counted'] = True
+                print(f"Counted new {class_name}")
         else:
+            # Create new tracked object
             obj_id = f"obj_{frame_count}_{len(new_tracked_objects)}"
             new_tracked_objects[obj_id] = {
                 'bbox': bbox,
                 'center': [center_x, center_y],
-                'direction': None,
-                'crossed': False,
-                'frames': 1
+                'class': class_name,
+                'frames': 1,
+                'counted': False
             }
 
     tracked_objects = new_tracked_objects
@@ -144,32 +152,25 @@ while True:
     # Vẽ bounding boxes và thông tin
     for obj_id, obj_data in tracked_objects.items():
         x1, y1, x2, y2 = obj_data['bbox']
-        center_x, center_y = obj_data['center']
+        class_name = obj_data['class']
         
         # Vẽ bounding box
-        color = (0, 255, 0) if not obj_data['crossed'] else (0, 0, 255)
+        color = (0, 255, 0) if obj_data['counted'] else (0, 0, 255)
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-        cv2.putText(frame, f'ID: {obj_id}', (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-        
-        # Vẽ hướng di chuyển
-        if obj_data['direction']:
-            direction_text = "UP" if obj_data['direction'] == 'up' else "DOWN"
-            cv2.putText(frame, direction_text, (x1, y2+20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-
-    # Vẽ counting line
-    cv2.line(frame, (0, counting_line_y), (width, counting_line_y), (255, 0, 0), 2)
-    cv2.putText(frame, 'Counting Line', (10, counting_line_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+        cv2.putText(frame, f'{class_name} {obj_id}', (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
     
     # Hiển thị số đếm
-    cv2.putText(frame, f'Total People Counted: {total_count}', (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    cv2.putText(frame, f'Total Objects Counted: {total_count}', (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
     
-    cv2.imshow('People Counter', frame)
+    cv2.imshow('Object Counter', frame)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-    if crossed_this_frame > 0:
-        update_counts()
+    # Update database for new objects
+    if new_objects_count > 0:
+        for _ in range(new_objects_count):
+            update_counts()
 
 cap.release()
 cv2.destroyAllWindows()
